@@ -34,6 +34,8 @@ SCALE_NOTE_COLOR = _blend(_SCALE_BASE, BG, 0.32)
 SCALE_ROOT_COLOR = _blend(_SCALE_BASE, BG, 0.60)
 SCALE_ROOT_OUTLINE = _blend("#1c4066", BG, 0.75)
 
+TARGET_RING_COLOR = "#2fa84f"
+
 
 class FretboardWidget(tk.Canvas):
     def __init__(self, master, **kwargs):
@@ -46,6 +48,7 @@ class FretboardWidget(tk.Canvas):
         self.margin_right = 25
         self._highlight_positions = []
         self._scale_positions = []
+        self._target_positions = []
         self.bind("<Configure>", lambda e: self._redraw())
         self._redraw()
 
@@ -56,6 +59,11 @@ class FretboardWidget(tk.Canvas):
     def set_scale_overlay(self, positions):
         """positions: iterable of (string_num, fret, is_root)."""
         self._scale_positions = positions
+        self._redraw()
+
+    def set_target_overlay(self, positions):
+        """positions: iterable of (string_num, fret) -- lesson step targets."""
+        self._target_positions = positions
         self._redraw()
 
     def _string_y(self, string_num, board_h):
@@ -124,7 +132,14 @@ class FretboardWidget(tk.Canvas):
                 r = 7
                 self.create_oval(x - r, y - r, x + r, y + r, fill=SCALE_NOTE_COLOR, outline="")
 
-        # Highlighted (played) note positions, on top of the scale overlay.
+        # Lesson step targets: hollow rings, drawn under the played-note
+        # highlight so a correct hit shows the orange dot landing inside the ring.
+        for string_num, fret in self._target_positions:
+            x, y = self._note_xy(string_num, fret, board_h, fret_w)
+            r = 13
+            self.create_oval(x - r, y - r, x + r, y + r, outline=TARGET_RING_COLOR, width=3)
+
+        # Highlighted (played) note positions, on top of everything else.
         for string_num, fret in self._highlight_positions:
             x, y = self._note_xy(string_num, fret, board_h, fret_w)
             r = 11

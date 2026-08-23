@@ -1,6 +1,7 @@
 """Frequency <-> note-name conversion and standard-tuning fretboard lookup."""
 
 import math
+import re
 
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
@@ -47,6 +48,18 @@ def freq_to_note(freq):
         "cents": cents,
         "freq": freq,
     }
+
+
+_NOTE_NAME_RE = re.compile(r"^([A-G]#?)(-?\d+)$")
+
+
+def note_name_to_midi(name):
+    """Parse a note name like 'A2' or 'C#4' into its MIDI number."""
+    match = _NOTE_NAME_RE.match(name)
+    if not match:
+        raise ValueError(f"Bad note name: {name!r}")
+    note, octave = match.group(1), int(match.group(2))
+    return (octave + 1) * 12 + NOTE_NAMES.index(note)
 
 
 def fretboard_positions(midi_note, num_frets=NUM_FRETS):

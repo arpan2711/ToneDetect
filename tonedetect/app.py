@@ -8,11 +8,14 @@ from tkinter import ttk
 from .audio_input import AudioInput, list_input_devices
 from .chord_detector import ChordDetector
 from .fretboard_widget import FretboardWidget
+from .lessons import LESSONS
 from .notes import NOTE_NAMES, freq_to_note, fretboard_positions
 from .pitch_detector import YinPitchDetector
+from .practice_engine import PracticeSession
 from .scales import SCALE_NAMES, scale_fretboard_positions
 
 NO_SCALE = "— None —"
+NO_LESSON = "— None —"
 
 SAMPLE_RATE = 44100
 BLOCK_SIZE = 4096
@@ -26,6 +29,7 @@ DEFAULT_CHORD_PEAK_RATIO = 0.15
 BG = "#1e1e1e"
 FG = "#e0542a"
 FG_DIM = "#aaaaaa"
+FG_GREEN = "#4fc471"
 SLIDER_TROUGH = "#3a3a3a"
 
 
@@ -39,9 +43,12 @@ class ToneDetectApp:
         self.silence_rms = DEFAULT_SILENCE_RMS
         self.hold_ms = DEFAULT_HOLD_MS
         self._last_active_time = None
+        self.practice_session = None
+        self._lessons_by_title = {lesson.title: lesson for lesson in LESSONS.values()}
 
         self._build_device_bar()
         self._build_scale_bar()
+        self._build_lesson_panel()
 
         self.note_label = tk.Label(root, text="—", font=("Segoe UI", 48, "bold"), fg=FG, bg=BG)
         self.note_label.pack(pady=(10, 0))
@@ -104,6 +111,92 @@ class ToneDetectApp:
             return
         positions = scale_fretboard_positions(root, self.scale_type_var.get())
         self.fretboard.set_scale_overlay(positions)
+
+    def _build_lesson_panel(self):
+        bar = tk.Frame(self.root, bg=BG)
+        bar.pack(fill=tk.X, padx=20, pady=(10, 0))
+
+        tk.Label(bar, text="Lesson:", fg=FG_DIM, bg=BG, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+
+        self.lesson_var = tk.StringVar(value=NO_LESSON)
+        lesson_names = [NO_LESSON] + list(self._lessons_by_title.keys())
+        self.lesson_combo = ttk.Combobox(
+            bar, textvariable=self.lesson_var, values=lesson_names, state="readonly", width=40,
+        )
+        self.lesson_combo.pack(side=tk.LEFT, padx=(8, 0))
+        self.lesson_combo.bind("<<ComboboxSelected>>", self._on_lesson_selected)
+
+        self.lesson_skip_btn = tk.Button(
+            bar, text="Skip step", command=self._skip_lesson_step, state=tk.DISABLED,
+            bg=SLIDER_TROUGH, fg=FG_DIM, activebackground=FG, relief=tk.FLAT,
+        )
+        self.lesson_skip_btn.pack(side=tk.LEFT, padx=(8, 0))
+
+        self.lesson_reset_btn = tk.Button(
+            bar, text="Restart", command=self._restart_lesson, state=tk.DISABLED,
+            bg=SLIDER_TROUGH, fg=FG_DIM, activebackground=FG, relief=tk.FLAT,
+        )
+        self.lesson_reset_btn.pack(side=tk.LEFT, padx=(6, 0))
+
+        panel = tk.Frame(self.root, bg=BG)
+        panel.pack(fill=tk.X, padx=20, pady=(4, 0))
+
+        self.lesson_step_label = tk.Label(
+            panel, text="", fg=FG_GREEN, bg=BG, font=("Segoe UI", 13, "bold"), anchor="w", justify=tk.LEFT,
+        )
+        self.lesson_step_label.pack(fill=tk.X)
+
+        self.lesson_progress_label = tk.Label(
+            panel, text="", fg=FG_DIM, bg=BG, font=("Segoe UI", 9), anchor="w", justify=tk.LEFT,
+        )
+        self.lesson_progress_label.pack(fill=tk.X)
+
+    def _on_lesson_selected(self, _event=None):
+        title = self.lesson_var.get()
+        if title == NO_LESSON:
+            self.practice_session = None
+            self.lesson_skip_btn.config(state=tk.DISABLED)
+            self.lesson_reset_btn.config(state=tk.DISABLED)
+            self.lesson_step_label.config(text="")
+            self.lesson_progress_label.config(text="")
+            self.fretboard.set_target_overlay([])
+            return
+
+        lesson = self._lessons_by_title[title]
+        self.practice_session = PracticeSession(lesson)
+        self.lesson_skip_btn.config(state=tk.NORMAL)
+        self.lesson_reset_btn.config(state=tk.NORMAL)
+        self._refresh_lesson_ui()
+
+    def _restart_lesson(self):
+        if self.practice_session is not None:
+            self.practice_session.reset()
+            self._refresh_lesson_ui()
+
+    def _skip_lesson_step(self):
+        if self.practice_session is not None:
+            self.practice_session.skip()
+            self._refresh_lesson_ui()
+
+    def _refresh_lesson_ui(self):
+        session = self.practice_session
+        if session is None:
+            return
+
+        idx, total = session.progress
+        if session.finished:
+            self.lesson_step_label.config(text=f"Lesson complete — {session.correct_count}/{total} correct.")
+            self.lesson_progress_label.config(text="")
+            self.fretboard.set_target_overlay([])
+            return
+
+        step = session.current_step
+        self.lesson_step_label.config(text=step.label)
+        progress_text = f"Step {idx + 1} of {total}"
+        if step.instructions:
+            progress_text += f"   —   {step.instructions}"
+        self.lesson_progress_label.config(text=progress_text)
+        self.fretboard.set_target_overlay(step.target_positions)
 
     def _build_controls(self):
         panel = tk.Frame(self.root, bg=BG)
@@ -178,6 +271,7 @@ class ToneDetectApp:
             pass
 
         now = time.monotonic()
+        detected_notes = []
 
         if buf is not None:
             rms = float((buf ** 2).mean() ** 0.5)
@@ -186,17 +280,27 @@ class ToneDetectApp:
                 chord_notes = self._dedupe_notes(chord_freqs)
 
                 if len(chord_notes) >= 2:
-                    self._show_chord(chord_notes)
-                    self._last_active_time = now
+                    detected_notes = chord_notes
                 else:
                     freq = self.detector.detect(buf)
                     if freq:
-                        self._show_single_note(freq)
-                        self._last_active_time = now
-                    else:
-                        self._maybe_clear(now)
+                        note = freq_to_note(freq)
+                        if note:
+                            detected_notes = [note]
+
+        if detected_notes:
+            self._last_active_time = now
+            if len(detected_notes) >= 2:
+                self._show_chord(detected_notes)
             else:
-                self._maybe_clear(now)
+                self._show_single_note(detected_notes[0])
+        else:
+            self._maybe_clear(now)
+
+        if self.practice_session is not None:
+            detected_midis = {n["midi"] for n in detected_notes}
+            if self.practice_session.check(detected_midis, now):
+                self._refresh_lesson_ui()
 
         self.root.after(POLL_MS, self.poll_audio)
 
@@ -221,10 +325,9 @@ class ToneDetectApp:
         notes.sort(key=lambda n: n["midi"])
         return notes
 
-    def _show_single_note(self, freq):
-        note = freq_to_note(freq)
+    def _show_single_note(self, note):
         self.note_label.config(text=note["name"])
-        self.freq_label.config(text=f"{freq:.1f} Hz   {note['cents']:+.0f} cents")
+        self.freq_label.config(text=f"{note['freq']:.1f} Hz   {note['cents']:+.0f} cents")
         self.fretboard.set_highlight(fretboard_positions(note["midi"]))
 
     def _show_chord(self, notes):

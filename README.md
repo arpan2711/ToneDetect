@@ -29,13 +29,19 @@ pitch accuracy, and authoring scales, arpeggios, and tabs as simple data.
 - Live-tunable detection: sliders for silence threshold, note hold time, pitch
   clarity, and chord sensitivity, plus an input device picker so you can select a
   USB audio interface (e.g. a NUX MG-300 II) instead of your system mic
+- Lessons: pick a lesson from the dropdown and it walks you through a sequence of
+  steps (scale notes, chords, licks), listening as you play. A step is marked
+  correct once the expected note(s) are detected and held briefly, and the
+  fretboard shows a green target ring at each step's suggested position. Matching
+  is pitch-only (right note advances you) — it can't tell which string you used,
+  and there's no tempo/rhythm scoring yet, just "did you play the right thing."
+  Ships with a "Johnny B. Goode Prep" lesson (scale, chords, intro lick, changes)
+  in `tonedetect/lessons/`; add a new module there and register it to add more
 
 ## Planned
 
 - More robust polyphonic detection
-- Lesson content defined as data (scales, arpeggios, tabs) in one shared format
-- A comparison/scoring layer: play along against an expected note sequence and
-  get feedback on wrong notes and timing drift
+- Tempo/rhythm-aware scoring within lessons, not just note correctness
 
 ## Requirements
 
@@ -62,5 +68,9 @@ top of the window, then play a note.
 - `tonedetect/pitch_detector.py` — estimates the fundamental frequency of each buffer using YIN (single-note path)
 - `tonedetect/chord_detector.py` — spectral peak-picking with harmonic suppression for multi-note detection
 - `tonedetect/notes.py` — converts frequency to note name/octave and maps notes to fretboard positions (standard tuning)
-- `tonedetect/fretboard_widget.py` — Tkinter canvas that draws the fretboard and highlights detected notes
+- `tonedetect/fretboard_widget.py` — Tkinter canvas that draws the fretboard, detected notes, scale overlay, and lesson targets
+- `tonedetect/scales.py` — scale patterns and their fretboard positions
+- `tonedetect/lesson_model.py` — data model for lessons (`Lesson` → `LessonSection` → `LessonStep`)
+- `tonedetect/practice_engine.py` — the comparison layer: checks live-detected notes against the current lesson step and advances
+- `tonedetect/lessons/` — lesson content, one module per lesson, registered in `tonedetect/lessons/__init__.py`
 - `tonedetect/app.py` — wires it all together into the main window
