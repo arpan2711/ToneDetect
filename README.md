@@ -21,8 +21,14 @@ pitch accuracy, and authoring scales, arpeggios, and tabs as simple data.
   overlapping harmonics between notes can mask or fake a peak
 - Fretboard diagram highlighting every position on a standard-tuned guitar where
   the detected note(s) occur
-- Input device picker, so you can select a USB audio interface (e.g. a NUX MG-300 II)
-  instead of your system mic
+- Scale overlay: pick a root and scale (major/minor modes, harmonic minor, melodic
+  minor, phrygian dominant, Hungarian/gypsy minor, pentatonics, blues) and its notes
+  light up translucently across the fretboard, underneath your solid, opaque
+  played-note markers — so you can see both what you're playing and where it sits
+  in the scale at the same time
+- Live-tunable detection: sliders for silence threshold, note hold time, pitch
+  clarity, and chord sensitivity, plus an input device picker so you can select a
+  USB audio interface (e.g. a NUX MG-300 II) instead of your system mic
 
 ## Planned
 

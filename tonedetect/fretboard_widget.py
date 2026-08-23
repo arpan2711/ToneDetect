@@ -20,6 +20,21 @@ HIGHLIGHT_OUTLINE = "#8a2f14"
 TEXT_COLOR = "#333333"
 
 
+def _blend(fg_hex, bg_hex, alpha):
+    """Fake translucency: blend fg over bg at the given alpha, since Tk
+    canvas fills don't support real alpha compositing."""
+    fg = tuple(int(fg_hex[i:i + 2], 16) for i in (1, 3, 5))
+    bg = tuple(int(bg_hex[i:i + 2], 16) for i in (1, 3, 5))
+    blended = tuple(round(alpha * f + (1 - alpha) * b) for f, b in zip(fg, bg))
+    return "#%02x%02x%02x" % blended
+
+
+_SCALE_BASE = "#2f6fb0"
+SCALE_NOTE_COLOR = _blend(_SCALE_BASE, BG, 0.32)
+SCALE_ROOT_COLOR = _blend(_SCALE_BASE, BG, 0.60)
+SCALE_ROOT_OUTLINE = _blend("#1c4066", BG, 0.75)
+
+
 class FretboardWidget(tk.Canvas):
     def __init__(self, master, **kwargs):
         kwargs.setdefault("bg", BG)
@@ -30,11 +45,17 @@ class FretboardWidget(tk.Canvas):
         self.margin_bottom = 25
         self.margin_right = 25
         self._highlight_positions = []
+        self._scale_positions = []
         self.bind("<Configure>", lambda e: self._redraw())
         self._redraw()
 
     def set_highlight(self, positions):
         self._highlight_positions = positions
+        self._redraw()
+
+    def set_scale_overlay(self, positions):
+        """positions: iterable of (string_num, fret, is_root)."""
+        self._scale_positions = positions
         self._redraw()
 
     def _string_y(self, string_num, board_h):
@@ -44,6 +65,11 @@ class FretboardWidget(tk.Canvas):
 
     def _fret_x(self, fret, fret_w):
         return self.margin_left + fret * fret_w
+
+    def _note_xy(self, string_num, fret, board_h, fret_w):
+        y = self._string_y(string_num, board_h)
+        x = (self.margin_left - 15) if fret == 0 else self._fret_x(fret - 0.5, fret_w)
+        return x, y
 
     def _redraw(self):
         self.delete("all")
@@ -87,9 +113,19 @@ class FretboardWidget(tk.Canvas):
             x = self._fret_x(f - 0.5, fret_w)
             self.create_text(x, self.margin_top + board_h + 12, text=str(f), font=("Segoe UI", 8), fill="#777777")
 
-        # Highlighted note positions.
+        # Scale overlay: translucent, drawn under the played-note highlight
+        # so both stay visible even when a played note lands on a scale tone.
+        for string_num, fret, is_root in self._scale_positions:
+            x, y = self._note_xy(string_num, fret, board_h, fret_w)
+            if is_root:
+                r = 10
+                self.create_oval(x - r, y - r, x + r, y + r, fill=SCALE_ROOT_COLOR, outline=SCALE_ROOT_OUTLINE, width=1)
+            else:
+                r = 7
+                self.create_oval(x - r, y - r, x + r, y + r, fill=SCALE_NOTE_COLOR, outline="")
+
+        # Highlighted (played) note positions, on top of the scale overlay.
         for string_num, fret in self._highlight_positions:
-            y = self._string_y(string_num, board_h)
-            x = (self.margin_left - 15) if fret == 0 else self._fret_x(fret - 0.5, fret_w)
+            x, y = self._note_xy(string_num, fret, board_h, fret_w)
             r = 11
             self.create_oval(x - r, y - r, x + r, y + r, fill=HIGHLIGHT_FILL, outline=HIGHLIGHT_OUTLINE, width=2)

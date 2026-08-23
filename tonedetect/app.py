@@ -8,8 +8,11 @@ from tkinter import ttk
 from .audio_input import AudioInput, list_input_devices
 from .chord_detector import ChordDetector
 from .fretboard_widget import FretboardWidget
-from .notes import freq_to_note, fretboard_positions
+from .notes import NOTE_NAMES, freq_to_note, fretboard_positions
 from .pitch_detector import YinPitchDetector
+from .scales import SCALE_NAMES, scale_fretboard_positions
+
+NO_SCALE = "— None —"
 
 SAMPLE_RATE = 44100
 BLOCK_SIZE = 4096
@@ -38,6 +41,7 @@ class ToneDetectApp:
         self._last_active_time = None
 
         self._build_device_bar()
+        self._build_scale_bar()
 
         self.note_label = tk.Label(root, text="—", font=("Segoe UI", 48, "bold"), fg=FG, bg=BG)
         self.note_label.pack(pady=(10, 0))
@@ -71,6 +75,35 @@ class ToneDetectApp:
         self.device_combo = ttk.Combobox(bar, textvariable=self.device_var, values=names, state="readonly", width=50)
         self.device_combo.pack(side=tk.LEFT, padx=(8, 0))
         self.device_combo.bind("<<ComboboxSelected>>", self.on_device_selected)
+
+    def _build_scale_bar(self):
+        bar = tk.Frame(self.root, bg=BG)
+        bar.pack(fill=tk.X, padx=20, pady=(10, 0))
+
+        tk.Label(bar, text="Scale:", fg=FG_DIM, bg=BG, font=("Segoe UI", 9)).pack(side=tk.LEFT)
+
+        self.scale_root_var = tk.StringVar(value=NO_SCALE)
+        root_values = [NO_SCALE] + NOTE_NAMES
+        self.scale_root_combo = ttk.Combobox(
+            bar, textvariable=self.scale_root_var, values=root_values, state="readonly", width=10,
+        )
+        self.scale_root_combo.pack(side=tk.LEFT, padx=(8, 0))
+        self.scale_root_combo.bind("<<ComboboxSelected>>", self._update_scale_overlay)
+
+        self.scale_type_var = tk.StringVar(value=SCALE_NAMES[0])
+        self.scale_type_combo = ttk.Combobox(
+            bar, textvariable=self.scale_type_var, values=SCALE_NAMES, state="readonly", width=26,
+        )
+        self.scale_type_combo.pack(side=tk.LEFT, padx=(8, 0))
+        self.scale_type_combo.bind("<<ComboboxSelected>>", self._update_scale_overlay)
+
+    def _update_scale_overlay(self, _event=None):
+        root = self.scale_root_var.get()
+        if root == NO_SCALE:
+            self.fretboard.set_scale_overlay([])
+            return
+        positions = scale_fretboard_positions(root, self.scale_type_var.get())
+        self.fretboard.set_scale_overlay(positions)
 
     def _build_controls(self):
         panel = tk.Frame(self.root, bg=BG)
