@@ -4,7 +4,7 @@ import numpy as np
 
 
 class YinPitchDetector:
-    def __init__(self, sample_rate, threshold=0.1, fmin=70.0, fmax=1000.0):
+    def __init__(self, sample_rate, threshold=0.1, fmin=70.0, fmax=2000.0):
         self.sample_rate = sample_rate
         self.threshold = threshold
         self.tau_min = max(2, int(sample_rate / fmax))

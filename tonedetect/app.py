@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from .audio_input import AudioInput, list_input_devices
+from .chord_detector import ChordDetector
 from .fretboard_widget import FretboardWidget
 from .notes import freq_to_note, fretboard_positions
 from .pitch_detector import YinPitchDetector
@@ -38,6 +39,7 @@ class ToneDetectApp:
         self.fretboard.pack(fill=tk.X, padx=20, pady=20)
 
         self.detector = YinPitchDetector(SAMPLE_RATE)
+        self.chord_detector = ChordDetector(SAMPLE_RATE)
         self.audio = AudioInput(samplerate=SAMPLE_RATE, blocksize=BLOCK_SIZE)
         self.audio.start()
 
@@ -76,18 +78,49 @@ class ToneDetectApp:
         if buf is not None:
             rms = float((buf ** 2).mean() ** 0.5)
             if rms >= SILENCE_RMS:
-                freq = self.detector.detect(buf)
-                if freq:
-                    note = freq_to_note(freq)
-                    self.note_label.config(text=note["name"])
-                    self.freq_label.config(text=f"{freq:.1f} Hz   {note['cents']:+.0f} cents")
-                    self.fretboard.set_highlight(fretboard_positions(note["midi"]))
+                chord_freqs = self.chord_detector.detect(buf)
+                chord_notes = self._dedupe_notes(chord_freqs)
+
+                if len(chord_notes) >= 2:
+                    self._show_chord(chord_notes)
                 else:
-                    self._clear_display()
+                    freq = self.detector.detect(buf)
+                    if freq:
+                        self._show_single_note(freq)
+                    else:
+                        self._clear_display()
             else:
                 self._clear_display()
 
         self.root.after(POLL_MS, self.poll_audio)
+
+    @staticmethod
+    def _dedupe_notes(freqs):
+        """Convert frequencies to notes, collapsing any that land on the same
+        MIDI note (e.g. two detected peaks an octave apart)."""
+        seen = set()
+        notes = []
+        for f in freqs:
+            note = freq_to_note(f)
+            if note and note["midi"] not in seen:
+                seen.add(note["midi"])
+                notes.append(note)
+        notes.sort(key=lambda n: n["midi"])
+        return notes
+
+    def _show_single_note(self, freq):
+        note = freq_to_note(freq)
+        self.note_label.config(text=note["name"])
+        self.freq_label.config(text=f"{freq:.1f} Hz   {note['cents']:+.0f} cents")
+        self.fretboard.set_highlight(fretboard_positions(note["midi"]))
+
+    def _show_chord(self, notes):
+        self.note_label.config(text=" · ".join(n["name"] for n in notes))
+        self.freq_label.config(text=f"{len(notes)} notes detected")
+        positions = []
+        for n in notes:
+            positions.extend(fretboard_positions(n["midi"]))
+        self.fretboard.set_highlight(positions)
 
     def _clear_display(self):
         self.note_label.config(text="—")

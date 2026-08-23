@@ -11,16 +11,22 @@ pitch accuracy, and authoring scales, arpeggios, and tabs as simple data.
 
 ## Stage 1 (current)
 
-- Live monophonic pitch detection (YIN algorithm) from any Windows audio input device
+- Live monophonic pitch detection (YIN algorithm) from any Windows audio input device,
+  covering the full fretted range (up to ~2000 Hz, well past the 22nd fret on the high E)
 - Note name + cents-off-pitch display
+- Basic chord detection: spectral peak-picking with harmonic suppression identifies
+  a handful of simultaneous notes. This is an approximation, not full polyphonic
+  transcription — it works reasonably on clean, simple voicings (open chords, power
+  chords, double-stops) but gets shakier on dense or heavily muted chords, since
+  overlapping harmonics between notes can mask or fake a peak
 - Fretboard diagram highlighting every position on a standard-tuned guitar where
-  the detected note occurs
+  the detected note(s) occur
 - Input device picker, so you can select a USB audio interface (e.g. a NUX MG-300 II)
   instead of your system mic
 
 ## Planned
 
-- Polyphonic / chord detection
+- More robust polyphonic detection
 - Lesson content defined as data (scales, arpeggios, tabs) in one shared format
 - A comparison/scoring layer: play along against an expected note sequence and
   get feedback on wrong notes and timing drift
@@ -47,7 +53,8 @@ top of the window, then play a note.
 ## How it works
 
 - `tonedetect/audio_input.py` — captures audio from the selected input device via `sounddevice`
-- `tonedetect/pitch_detector.py` — estimates the fundamental frequency of each buffer using YIN
+- `tonedetect/pitch_detector.py` — estimates the fundamental frequency of each buffer using YIN (single-note path)
+- `tonedetect/chord_detector.py` — spectral peak-picking with harmonic suppression for multi-note detection
 - `tonedetect/notes.py` — converts frequency to note name/octave and maps notes to fretboard positions (standard tuning)
 - `tonedetect/fretboard_widget.py` — Tkinter canvas that draws the fretboard and highlights detected notes
 - `tonedetect/app.py` — wires it all together into the main window
